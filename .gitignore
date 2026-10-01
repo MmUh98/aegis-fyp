@@ -20,3 +20,6 @@ faceforensics_data/
 # Hardhat / Smart Contracts
 artifacts/
 cache/
+
+# Spike A generated outputs
+backend/spike_a/out/

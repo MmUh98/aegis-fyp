@@ -1,0 +1,5 @@
+{
+  "extraPaths": [
+    "backend/third_party/falcon_py"
+  ]
+}

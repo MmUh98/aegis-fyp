@@ -1,0 +1,6 @@
+c2pa-python==0.38.0
+cryptography>=42
+pillow>=10
+numpy>=1.26
+beartype>=0.18
+pycryptodome>=3.20
