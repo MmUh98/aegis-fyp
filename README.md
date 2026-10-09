@@ -74,6 +74,21 @@ python -m venv .venv
 source .venv/bin/activate
 ```
 
+The production verification API uses the aggregate backend requirements file:
+
+```bash
+pip install -r requirements.txt
+PYTHONPATH=. uvicorn app.main:app --reload
+```
+
+Set `AEGIS_REGISTRY_V2_ADDRESS` and `AMOY_RPC_URL` for read-only registry lookups. The API accepts image and video uploads at `POST /api/v1/verify`, and keeps temporary uploads in a randomized, cleaned-up directory.
+
+Install the optional SigLIP-2 fallback separately when AI scoring is needed:
+
+```bash
+pip install -r requirements-ai.txt
+```
+
 Install each spike's dependencies from its own directory:
 
 ```bash
