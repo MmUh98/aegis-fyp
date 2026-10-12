@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.routers import register
 from app.services.c2pa_service import verify_c2pa_file
 from app.services.chain_client import lookup_on_chain_by_manifest, lookup_on_chain_by_phash
 from app.services.decide import C2PAStatus, DecisionResult, decide
@@ -20,6 +21,7 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+app.include_router(register.router)
 
 UPLOAD_DIR = Path(os.getenv("AEGIS_UPLOAD_DIR", "secure_temp_uploads"))
 UPLOAD_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
