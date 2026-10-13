@@ -1,0 +1,165 @@
+{
+  "contract_version": 1,
+  "created": "2026-10-10 11:21:52",
+  "model_id": "google/siglip2-base-patch16-224",
+  "revision": null,
+  "final_model": "finetuned",
+  "finetuned_state": "vision_finetuned_tensors.pt",
+  "head": {
+    "kind": "mlp",
+    "hidden": 768,
+    "cfg": {
+      "kind": "mlp",
+      "lr": 0.0003,
+      "wd": 0.1
+    }
+  },
+  "label_map": {
+    "real": 0,
+    "fake": 1
+  },
+  "video_aggregator": "median",
+  "thresholds": {
+    "frame": 0.9544779658317566,
+    "video": 0.6675986349582672,
+    "target_fpr_on_val": 0.05
+  },
+  "preprocessing": {
+    "crop_size": 224,
+    "face_margin": 0.3,
+    "frames_per_video": 16,
+    "drop_no_face_frames": true,
+    "jpeg_quality": 95,
+    "face_detector": "mtcnn",
+    "processor_class": "SiglipImageProcessor"
+  },
+  "metrics": {
+    "test_frame": {
+      "n": 4640,
+      "n_real": 2240,
+      "n_fake": 2400,
+      "thr": 0.9545,
+      "auc": 0.9021,
+      "ap": 0.9208,
+      "fpr": 0.0683,
+      "recall": 0.7163,
+      "precision": 0.9183,
+      "f1": 0.8048,
+      "bal_acc": 0.824,
+      "acc": 0.8203,
+      "tn": 2087,
+      "fp": 153,
+      "fn": 681,
+      "tp": 1719
+    },
+    "test_video": {
+      "n": 290,
+      "n_real": 140,
+      "n_fake": 150,
+      "thr": 0.6676,
+      "auc": 0.9258,
+      "ap": 0.9421,
+      "fpr": 0.0929,
+      "recall": 0.82,
+      "precision": 0.9044,
+      "f1": 0.8601,
+      "bal_acc": 0.8636,
+      "acc": 0.8621,
+      "tn": 127,
+      "fp": 13,
+      "fn": 27,
+      "tp": 123
+    },
+    "val_video": {
+      "n": 292,
+      "n_real": 140,
+      "n_fake": 152,
+      "thr": 0.6676,
+      "auc": 0.9373,
+      "ap": 0.9503,
+      "fpr": 0.05,
+      "recall": 0.7697,
+      "precision": 0.9435,
+      "f1": 0.8478,
+      "bal_acc": 0.8599,
+      "acc": 0.8562,
+      "tn": 133,
+      "fp": 7,
+      "fn": 35,
+      "tp": 117
+    },
+    "test_video_ci": {
+      "auc": [
+        0.8998,
+        0.95
+      ],
+      "fpr": [
+        0.0429,
+        0.1429
+      ],
+      "recall": [
+        0.7548,
+        0.8776
+      ]
+    },
+    "robustness": [
+      {
+        "perturbation": "none",
+        "auc": 0.904,
+        "fpr": 0.067,
+        "recall": 0.718
+      },
+      {
+        "perturbation": "jpeg70",
+        "auc": 0.87,
+        "fpr": 0.048,
+        "recall": 0.538
+      },
+      {
+        "perturbation": "jpeg40",
+        "auc": 0.841,
+        "fpr": 0.037,
+        "recall": 0.469
+      },
+      {
+        "perturbation": "downscale0.5",
+        "auc": 0.827,
+        "fpr": 0.193,
+        "recall": 0.683
+      },
+      {
+        "perturbation": "blur",
+        "auc": 0.802,
+        "fpr": 0.265,
+        "recall": 0.705
+      }
+    ]
+  },
+  "provenance": {
+    "datasets": [
+      {
+        "name": "ffpp_c23",
+        "root": "/kaggle/input/datasets/xdxd003/ff-c23/FaceForensics++_C23",
+        "kind": "video",
+        "exclude": [
+          "DeepFakeDetection",
+          "csv"
+        ]
+      }
+    ],
+    "split_fracs": [
+      0.7,
+      0.15,
+      0.15
+    ],
+    "seed": 42,
+    "n_train_videos": 1418,
+    "n_val_videos": 292,
+    "n_test_videos": 290
+  },
+  "versions": {
+    "torch": "2.11.0+cu128",
+    "transformers": "5.16.1",
+    "python": "3.13.15"
+  }
+}

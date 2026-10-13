@@ -36,6 +36,8 @@ class DecisionResult(BaseModel):
     on_chain_match: bool
     phash_distance: Optional[int] = None
     ai_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    threshold_used: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    detector_reason: Optional[str] = None
 
 
 def decide(
@@ -47,6 +49,9 @@ def decide(
     phash_threshold: int = 10,
     ai_score: Optional[float] = None,
     ai_error: bool = False,
+    ai_verdict: Optional[str] = None,
+    threshold_used: Optional[float] = None,
+    detector_reason: Optional[str] = None,
 ) -> DecisionResult:
     """Evaluate evidence without I/O, mutation, or exceptions for normal bad input."""
     if c2pa_status == C2PAStatus.TAMPERED:
@@ -105,6 +110,39 @@ def decide(
                 c2pa_status=c2pa_status,
                 on_chain_match=False,
             )
+        if ai_verdict == "UNCERTAIN":
+            return DecisionResult(
+                verdict=Verdict.INCONCLUSIVE,
+                confidence_score=0.0,
+                reason=detector_reason or "The AI detector score is within its uncertain decision band.",
+                c2pa_status=c2pa_status,
+                on_chain_match=False,
+                ai_score=ai_score,
+                threshold_used=threshold_used,
+                detector_reason=detector_reason,
+            )
+        if ai_verdict == "LIKELY_FAKE":
+            return DecisionResult(
+                verdict=Verdict.LIKELY_FAKE,
+                confidence_score=round(ai_score, 4),
+                reason=detector_reason or "The AI detector flagged manipulation evidence.",
+                c2pa_status=c2pa_status,
+                on_chain_match=False,
+                ai_score=ai_score,
+                threshold_used=threshold_used,
+                detector_reason=detector_reason,
+            )
+        if ai_verdict == "LIKELY_REAL":
+            return DecisionResult(
+                verdict=Verdict.LIKELY_REAL,
+                confidence_score=round(1.0 - ai_score, 4),
+                reason=detector_reason or "The AI detector found no manipulation evidence.",
+                c2pa_status=c2pa_status,
+                on_chain_match=False,
+                ai_score=ai_score,
+                threshold_used=threshold_used,
+                detector_reason=detector_reason,
+            )
         if 0.35 <= ai_score <= 0.65:
             return DecisionResult(
                 verdict=Verdict.INCONCLUSIVE,
@@ -113,6 +151,8 @@ def decide(
                 c2pa_status=c2pa_status,
                 on_chain_match=False,
                 ai_score=ai_score,
+                threshold_used=threshold_used,
+                detector_reason=detector_reason,
             )
         if ai_score > 0.65:
             return DecisionResult(
@@ -122,6 +162,8 @@ def decide(
                 c2pa_status=c2pa_status,
                 on_chain_match=False,
                 ai_score=ai_score,
+                threshold_used=threshold_used,
+                detector_reason=detector_reason,
             )
         return DecisionResult(
             verdict=Verdict.LIKELY_REAL,
@@ -130,6 +172,8 @@ def decide(
             c2pa_status=c2pa_status,
             on_chain_match=False,
             ai_score=ai_score,
+            threshold_used=threshold_used,
+            detector_reason=detector_reason,
         )
 
     return DecisionResult(

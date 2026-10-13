@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 import os
 import uuid
 from pathlib import Path
@@ -8,12 +9,19 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import register
+from spike_c.evaluator import evaluate_ai_deepfake, load_detector
 from app.services.c2pa_service import verify_c2pa_file
 from app.services.chain_client import lookup_on_chain_by_manifest, lookup_on_chain_by_phash
 from app.services.decide import C2PAStatus, DecisionResult, decide
 from app.services.fingerprint import compute_phash, hamming_distance
 
-app = FastAPI(title="Aegis Media Provenance API", version="2.0.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    load_detector()
+    yield
+
+
+app = FastAPI(title="Aegis Media Provenance API", version="2.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin for origin in os.getenv("AEGIS_CORS_ORIGINS", "http://localhost:5173").split(",") if origin],
@@ -33,16 +41,6 @@ MAX_FILE_SIZE = 50 * 1024 * 1024
 @app.get("/")
 def root() -> dict[str, str]:
     return {"service": "Aegis Media Provenance API", "docs": "/docs", "health": "/health"}
-
-
-def _calculate_ai_score(file_path: Path, extension: str) -> float | None:
-    if extension in {".mp4", ".mov"}:
-        return None
-    from PIL import Image
-    from spike_c.spike_c_siglip2 import calculate_deepfake_score
-
-    with Image.open(file_path) as image:
-        return calculate_deepfake_score(image.convert("RGB"))
 
 
 @app.get("/health")
@@ -98,11 +96,18 @@ def verify_media(file: UploadFile = File(...)) -> DecisionResult:
 
         ai_score = None
         ai_error = False
+        ai_verdict = None
+        threshold_used = None
+        detector_reason = None
         if c2pa_status == C2PAStatus.ABSENT and on_chain_record is None:
-            try:
-                ai_score = _calculate_ai_score(temp_path, extension)
+            if extension not in {".mp4", ".mov"}:
+                ai_result = evaluate_ai_deepfake(str(temp_path))
+                ai_score = ai_result.get("ai_score")
+                ai_verdict = ai_result.get("verdict")
+                threshold_used = ai_result.get("threshold_used")
+                detector_reason = ai_result.get("reason")
                 ai_error = ai_score is None
-            except Exception:
+            else:
                 ai_error = True
 
         return decide(
@@ -113,6 +118,9 @@ def verify_media(file: UploadFile = File(...)) -> DecisionResult:
             phash_distance=phash_distance,
             ai_score=ai_score,
             ai_error=ai_error,
+            ai_verdict=ai_verdict,
+            threshold_used=threshold_used,
+            detector_reason=detector_reason,
         )
     finally:
         file.file.close()
