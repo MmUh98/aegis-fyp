@@ -25,11 +25,15 @@ Aegis is a research prototype for verifying digital media authenticity. It combi
 
 ## Frontend Setup
 
+From the repository root, run the Vite app from the `frontend/` directory:
+
 ```bash
-cd frontend
+cd ~/aegis-fyp/frontend
 npm install
-npm run dev
+npm run dev -- --host 127.0.0.1 --port 5173
 ```
+
+Open `http://127.0.0.1:5173/`. The dashboard uses the backend at `http://127.0.0.1:8000` by default. To override it, create `frontend/.env` from [frontend/.env.example](frontend/.env.example) and set `VITE_API_URL`.
 
 Other frontend commands:
 
@@ -42,9 +46,15 @@ npm run preview
 ## Smart Contracts Setup
 
 ```bash
-cd contracts
+cd ~/aegis-fyp/contracts
 npm install
 npx hardhat compile
+```
+
+Deploy the optimized V2 registry to Polygon Amoy with:
+
+```bash
+npx hardhat run scripts/deploy_v2.js --network amoy
 ```
 
 The `AegisRegistry` contract emits a `ContentRegistered` event containing:
@@ -69,7 +79,7 @@ Never commit `.env` files, private keys, or other secrets.
 Create or activate the shared virtual environment:
 
 ```bash
-cd backend
+cd ~/aegis-fyp/backend
 python -m venv .venv
 source .venv/bin/activate
 ```
@@ -78,8 +88,10 @@ The production verification API uses the aggregate backend requirements file:
 
 ```bash
 pip install -r requirements.txt
-PYTHONPATH=. uvicorn app.main:app --reload
+PYTHONPATH=. uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
+
+The API is available at `http://127.0.0.1:8000/`, with interactive documentation at `http://127.0.0.1:8000/docs`.
 
 Set `AEGIS_REGISTRY_V2_ADDRESS` and `AMOY_RPC_URL` for read-only registry lookups. The API accepts image and video uploads at `POST /api/v1/verify`, and keeps temporary uploads in a randomized, cleaned-up directory.
 
