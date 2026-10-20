@@ -81,7 +81,7 @@ def test_c2pa_precedence_skips_ai(monkeypatch):
     monkeypatch.setattr(main, "lookup_on_chain_by_manifest", lambda _hash: OnChainRecord(
         creator_address="0x0", falcon_key_hash="key", manifest_hash="manifest", phash_hex="a" * 16, timestamp=1
     ))
-    monkeypatch.setattr(main, "evaluate_ai_deepfake", fail_ai)
+    monkeypatch.setattr(main, "evaluate_multimodal_deepfake", fail_ai)
     result = main.verify_media(_upload())
     assert result.verdict.value == "VERIFIED_AUTHENTIC"
     assert called is False
@@ -103,7 +103,7 @@ def test_registry_precedence_skips_ai(monkeypatch):
     monkeypatch.setattr(main, "lookup_on_chain_by_phash", lambda _hash: OnChainRecord(
         creator_address="0x0", falcon_key_hash="key", manifest_hash="manifest", phash_hex="a" * 16, timestamp=1
     ))
-    monkeypatch.setattr(main, "evaluate_ai_deepfake", fail_ai)
+    monkeypatch.setattr(main, "evaluate_multimodal_deepfake", fail_ai)
     result = main.verify_media(_upload())
     assert result.verdict.value == "PROVENANCE_STRIPPED"
     assert called is False

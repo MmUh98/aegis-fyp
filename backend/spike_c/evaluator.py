@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import tempfile
 import threading
 from pathlib import Path
 from typing import Optional
@@ -10,7 +11,9 @@ import torch
 from PIL import Image, ImageOps
 from transformers import AutoImageProcessor
 
+from spike_c import audio_evaluator
 from spike_c.classifier import AegisBaseDetector
+from spike_c.media_utils import MediaError, extract_audio, extract_frames, probe_media
 from spike_c.models.siglip2_base.aegis_common import FaceDetector, decode_jpeg, encode_jpeg, load_rgb, prepare_crop
 
 logger = logging.getLogger(__name__)
@@ -33,6 +36,10 @@ _face_detector = None
 _threshold = DEFAULT_THRESHOLD
 _margin = DEFAULT_UNCERTAIN_MARGIN
 _preprocessing = {"face_margin": 0.3, "crop_size": 224, "jpeg_quality": 95}
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+VIDEO_EXTS = {".mp4", ".mov", ".webm"}
+FRAME_TOP_K = 3
+_analysis_slots = threading.BoundedSemaphore(2)
 
 
 def load_detector() -> None:
@@ -86,23 +93,27 @@ def _verdict(probability: float) -> str:
     return "UNCERTAIN"
 
 
+def _score_pil(image: Image.Image) -> float:
+    if _model is None:
+        load_detector()
+    rgb = load_rgb(image)
+    crop, _ = prepare_crop(
+        rgb,
+        _face_detector,
+        float(_preprocessing.get("face_margin", 0.3)),
+        int(_preprocessing.get("crop_size", 224)),
+    )
+    prepared = decode_jpeg(encode_jpeg(crop, int(_preprocessing.get("jpeg_quality", 95))))
+    inputs = _processor(images=prepared, return_tensors="pt")
+    inputs = {key: value.to(DEVICE) for key, value in inputs.items() if hasattr(value, "to")}
+    with torch.inference_mode():
+        return torch.sigmoid(_model(**inputs)).item()
+
+
 def evaluate_ai_deepfake(image_path: str) -> dict:
     try:
-        if _model is None:
-            load_detector()
         image = _load_image(image_path)
-        rgb = load_rgb(image)
-        crop, _ = prepare_crop(
-            rgb,
-            _face_detector,
-            float(_preprocessing.get("face_margin", 0.3)),
-            int(_preprocessing.get("crop_size", 224)),
-        )
-        prepared = decode_jpeg(encode_jpeg(crop, int(_preprocessing.get("jpeg_quality", 95))))
-        inputs = _processor(images=prepared, return_tensors="pt")
-        inputs = {key: value.to(DEVICE) for key, value in inputs.items() if hasattr(value, "to")}
-        with torch.inference_mode():
-            probability = torch.sigmoid(_model(**inputs)).item()
+        probability = _score_pil(image)
         verdict = _verdict(probability)
         return {
             "ai_score": round(probability, 4),
@@ -121,3 +132,134 @@ def evaluate_ai_deepfake(image_path: str) -> dict:
             "verdict": "INCONCLUSIVE",
             "reason": f"AI evaluation error: {type(error).__name__}: {error}",
         }
+
+
+def evaluate_video_frames(frame_paths) -> dict:
+    if _model is None:
+        load_detector()
+    scores = []
+    for frame_path in frame_paths:
+        with Image.open(frame_path) as image:
+            scores.append(_score_pil(image.convert("RGB")))
+    if not scores:
+        return {"status": "error", "verdict": None, "score": None}
+    top_scores = sorted(scores, reverse=True)[:FRAME_TOP_K]
+    aggregate = sum(top_scores) / len(top_scores)
+    return {
+        "status": "ran",
+        "score": round(aggregate, 4),
+        "verdict": _verdict(aggregate),
+        "threshold_used": _threshold,
+        "uncertain_margin": _margin,
+        "frames_analyzed": len(scores),
+        "frame_scores": [round(score, 4) for score in scores],
+    }
+
+
+def fuse_modalities(visual: dict, audio: dict) -> dict:
+    modalities = {"visual": visual, "audio": audio}
+    triggered = [name for name, modality in modalities.items() if modality.get("verdict") == "LIKELY_FAKE"]
+    ran = [name for name, modality in modalities.items() if modality.get("status") == "ran"]
+    failed = [name for name, modality in modalities.items() if modality.get("status") in {"error", "disabled"}]
+    uncertain = [name for name in ran if modalities[name].get("verdict") == "UNCERTAIN"]
+    if triggered:
+        verdict = "LIKELY_FAKE"
+    elif not ran:
+        verdict = "INCONCLUSIVE"
+    elif failed or uncertain:
+        verdict = "UNCERTAIN"
+    else:
+        verdict = "LIKELY_REAL"
+    return {"verdict": verdict, "triggered_by": triggered, "failed": failed}
+
+
+_AUDIO_NOTES = {
+    "no_audio_track": "The video has no audio track, so only the visual detector was used.",
+    "no_usable_audio": "The audio was silent or too short to analyze, so only the visual detector was used.",
+    "disabled": "The audio detector is offline, so the result is incomplete.",
+    "error": "Audio analysis failed, so the result is incomplete.",
+}
+
+
+def _build_reason(visual: dict, audio: dict, fused: dict) -> str:
+    parts = []
+    if visual.get("status") == "ran":
+        parts.append(f"Visual detector score {visual['score']:.2f} (threshold {visual['threshold_used']:.2f}).")
+    elif visual.get("status") == "error":
+        parts.append("Visual analysis failed.")
+    if audio.get("status") == "ran":
+        parts.append(f"Audio detector score {audio['score']:.2f} (threshold {audio['threshold_used']:.2f}).")
+    elif audio.get("status") in _AUDIO_NOTES:
+        parts.append(_AUDIO_NOTES[audio["status"]])
+    if fused["triggered_by"]:
+        parts.append("Flagged by: " + ", ".join(fused["triggered_by"]) + ". Either detector can flag the file.")
+    parts.append("Scores are uncalibrated model outputs, not proof.")
+    return " ".join(parts)
+
+
+def _modality_from_image_result(result: dict) -> dict:
+    if result.get("ai_score") is None:
+        return {"status": "error", "verdict": None, "score": None}
+    return {
+        "status": "ran",
+        "score": result["ai_score"],
+        "verdict": result["verdict"],
+        "threshold_used": result.get("threshold_used"),
+        "uncertain_margin": result.get("uncertain_margin"),
+    }
+
+
+def _response(media_type: str, visual: dict, audio: dict) -> dict:
+    fused = fuse_modalities(visual, audio)
+    output = {
+        "verdict": fused["verdict"],
+        "reason": _build_reason(visual, audio, fused),
+        "media_type": media_type,
+        "fusion_rule": "OR_FAIL_CLOSED",
+        "triggered_by": fused["triggered_by"],
+        "visual": visual,
+        "audio": audio,
+        "ai_score": visual.get("score"),
+        "threshold_used": visual.get("threshold_used"),
+    }
+    if audio.get("status") == "ran":
+        output["audio_score"] = audio["score"]
+    return output
+
+
+def _inconclusive(media_type: str, reason: str) -> dict:
+    output = _response(
+        media_type,
+        {"status": "error", "verdict": None, "score": None},
+        {"status": "not_applicable", "verdict": None, "score": None},
+    )
+    output["reason"] = reason
+    return output
+
+
+def evaluate_multimodal_deepfake(media_path: str) -> dict:
+    """Blocking multimodal analysis for an image or bounded video."""
+    extension = Path(media_path).suffix.lower()
+    try:
+        if extension in IMAGE_EXTS:
+            visual = _modality_from_image_result(evaluate_ai_deepfake(media_path))
+            return _response("image", visual, {"status": "not_applicable", "verdict": None, "score": None})
+        if extension in VIDEO_EXTS:
+            with _analysis_slots, tempfile.TemporaryDirectory(prefix="aegis_") as workdir:
+                info = probe_media(media_path)
+                frames = extract_frames(media_path, workdir, info.duration)
+                visual = evaluate_video_frames(frames)
+                if info.has_audio:
+                    try:
+                        audio = audio_evaluator.evaluate_audio_deepfake(str(extract_audio(media_path, workdir)))
+                    except MediaError:
+                        audio = {"status": "error", "verdict": None, "score": None}
+                else:
+                    audio = {"status": "no_audio_track", "verdict": None, "score": None}
+            return _response("video", visual, audio)
+        return _inconclusive("unknown", "Unsupported media type.")
+    except MediaError as error:
+        return _inconclusive("video", str(error))
+    except Exception:
+        logger.exception("Multimodal evaluation failed for %s", Path(media_path).name)
+        return _inconclusive("video" if extension in VIDEO_EXTS else "image", "Analysis failed unexpectedly.")

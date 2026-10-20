@@ -1,16 +1,8 @@
 import { useState } from 'react'
 import { FileImage, UploadCloud } from 'lucide-react'
+import { IMAGE_TYPES, validateFile } from './fileTypes'
 
-const MAX_BYTES = 15 * 1024 * 1024
-const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp']
-
-function validateFile(file, accepted = ACCEPTED) {
-  if (!accepted.includes(file.type)) return 'Unsupported file type. Please use a JPG, PNG, or WEBP image.'
-  if (file.size > MAX_BYTES) return `File is too large. Maximum size is ${MAX_BYTES / (1024 * 1024)} MB.`
-  return null
-}
-
-export default function DropZone({ onFile, label, hint, accepted = ACCEPTED, fileName }) {
+export default function DropZone({ onFile, label, hint, accepted = IMAGE_TYPES, fileName }) {
   const [dragging, setDragging] = useState(false)
 
   const handle = (file) => {

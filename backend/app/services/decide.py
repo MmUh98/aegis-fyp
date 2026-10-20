@@ -11,6 +11,7 @@ class Verdict(str, Enum):
     PROVENANCE_STRIPPED = "PROVENANCE_STRIPPED"
     LIKELY_REAL = "LIKELY_REAL"
     LIKELY_FAKE = "LIKELY_FAKE"
+    UNCERTAIN = "UNCERTAIN"
     INCONCLUSIVE = "INCONCLUSIVE"
 
 
@@ -38,6 +39,13 @@ class DecisionResult(BaseModel):
     ai_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     threshold_used: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     detector_reason: Optional[str] = None
+    media_type: Optional[str] = None
+    fusion_rule: Optional[str] = None
+    triggered_by: list[str] = Field(default_factory=list)
+    visual: Optional[dict] = None
+    audio: Optional[dict] = None
+    audio_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    registry_status: Optional[str] = None
 
 
 def decide(

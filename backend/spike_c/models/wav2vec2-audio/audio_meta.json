@@ -1,0 +1,13 @@
+{
+  "model_id": "Hemgg/Deepfake-audio-detection",
+  "model_revision": "0d75271368ef2c7efd14831dc503c431f6aab0eb",
+  "fake_label_index": 0,
+  "verified": true,
+  "verified_on": ["real.wav", "fake.wav"],
+  "threshold": 0.5,
+  "uncertain_margin": 0.15,
+  "observed_probabilities": {
+    "real.wav": [0.89012, 0.10988],
+    "fake.wav": [0.975955, 0.024045]
+  }
+}
