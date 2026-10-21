@@ -10,6 +10,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from spike_c.audio_evaluator import load_audio_detector
+from spike_c.device import DEVICE, describe_device
 from spike_c.evaluator import evaluate_multimodal_deepfake, load_detector
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -21,6 +22,7 @@ def main() -> int:
     parser.add_argument("video", help="Path to a video file to analyze")
     args = parser.parse_args()
 
+    logger.info("device: %s", describe_device())
     load_detector()
     load_audio_detector()
     result = evaluate_multimodal_deepfake(args.video)

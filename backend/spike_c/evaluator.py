@@ -13,6 +13,7 @@ from transformers import AutoImageProcessor
 
 from spike_c import audio_evaluator
 from spike_c.classifier import AegisBaseDetector
+from spike_c.device import DEVICE
 from spike_c.media_utils import MediaError, extract_audio, extract_frames, probe_media
 from spike_c.models.siglip2_base.aegis_common import FaceDetector, decode_jpeg, encode_jpeg, load_rgb, prepare_crop
 
@@ -23,7 +24,6 @@ VISION_WEIGHTS = MODEL_DIR / "vision_finetuned_tensors.pt"
 HEAD_WEIGHTS = MODEL_DIR / "head.pt"
 META_PATH = MODEL_DIR / "aegis_meta.json"
 MODEL_ID = "google/siglip2-base-patch16-224"
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 MAX_FILE_BYTES = 15 * 1024 * 1024
 Image.MAX_IMAGE_PIXELS = 50_000_000
 DEFAULT_THRESHOLD = 0.50
@@ -179,6 +179,31 @@ _AUDIO_NOTES = {
     "disabled": "The audio detector is offline, so the result is incomplete.",
     "error": "Audio analysis failed, so the result is incomplete.",
 }
+_AUDIO_ABSENT = {"not_applicable", "no_audio_track", "no_usable_audio"}
+_DIAGNOSIS = {
+    ("REAL", "REAL"): "Authentic",
+    ("REAL", "FAKE"): "Audio Substitution",
+    ("FAKE", "REAL"): "AI Visual",
+    ("FAKE", "FAKE"): "Full Deepfake",
+}
+
+
+def _side(modality: dict):
+    if modality.get("status") != "ran":
+        return None
+    return {"LIKELY_REAL": "REAL", "LIKELY_FAKE": "FAKE"}.get(modality.get("verdict"))
+
+
+def diagnose(visual: dict, audio: dict) -> dict:
+    visual_side = _side(visual)
+    if visual_side is None:
+        return {"diagnosis": None, "audio_assessed": False}
+    if audio.get("status") in _AUDIO_ABSENT:
+        return {"diagnosis": "Authentic" if visual_side == "REAL" else "AI Visual", "audio_assessed": False}
+    audio_side = _side(audio)
+    if audio_side is None:
+        return {"diagnosis": None, "audio_assessed": audio.get("status") == "ran"}
+    return {"diagnosis": _DIAGNOSIS[(visual_side, audio_side)], "audio_assessed": True}
 
 
 def _build_reason(visual: dict, audio: dict, fused: dict) -> str:
@@ -191,6 +216,10 @@ def _build_reason(visual: dict, audio: dict, fused: dict) -> str:
         parts.append(f"Audio detector score {audio['score']:.2f} (threshold {audio['threshold_used']:.2f}).")
     elif audio.get("status") in _AUDIO_NOTES:
         parts.append(_AUDIO_NOTES[audio["status"]])
+    if audio.get("status") != "ran":
+        parts.append("Audio was not assessed.")
+    elif audio.get("calibration_status") in {None, "none", "provisional"}:
+        parts.append("Audio threshold is provisional or uncalibrated.")
     if fused["triggered_by"]:
         parts.append("Flagged by: " + ", ".join(fused["triggered_by"]) + ". Either detector can flag the file.")
     parts.append("Scores are uncalibrated model outputs, not proof.")
@@ -209,14 +238,18 @@ def _modality_from_image_result(result: dict) -> dict:
     }
 
 
-def _response(media_type: str, visual: dict, audio: dict) -> dict:
+def _response(media_type: str, visual: dict, audio: dict, media_duration_seconds: float | None = None) -> dict:
     fused = fuse_modalities(visual, audio)
+    diagnosis = diagnose(visual, audio)
     output = {
         "verdict": fused["verdict"],
         "reason": _build_reason(visual, audio, fused),
         "media_type": media_type,
         "fusion_rule": "OR_FAIL_CLOSED",
         "triggered_by": fused["triggered_by"],
+        "diagnosis": diagnosis["diagnosis"],
+        "audio_assessed": diagnosis["audio_assessed"],
+        "media_duration_seconds": media_duration_seconds,
         "visual": visual,
         "audio": audio,
         "ai_score": visual.get("score"),
@@ -256,7 +289,7 @@ def evaluate_multimodal_deepfake(media_path: str) -> dict:
                         audio = {"status": "error", "verdict": None, "score": None}
                 else:
                     audio = {"status": "no_audio_track", "verdict": None, "score": None}
-            return _response("video", visual, audio)
+            return _response("video", visual, audio, info.duration)
         return _inconclusive("unknown", "Unsupported media type.")
     except MediaError as error:
         return _inconclusive("video", str(error))

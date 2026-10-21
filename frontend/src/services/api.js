@@ -30,6 +30,10 @@ export function normalizeVerifyResponse(data) {
       threshold: num(raw?.threshold_used ?? fallbackThreshold),
       frames: num(raw?.frames_analyzed),
       chunks: num(raw?.chunks_analyzed),
+      windows: Array.isArray(raw?.windows) ? raw.windows.filter((window) => typeof window?.start === 'number' && typeof window?.end === 'number' && typeof window?.score === 'number') : [],
+      modelLabel: raw?.model_label ?? null,
+      calibration: raw?.calibration_status ?? null,
+      uncertainMargin: num(raw?.uncertain_margin),
     }
   }
 
@@ -54,6 +58,9 @@ export function normalizeVerifyResponse(data) {
     visual,
     audio,
     triggeredBy: Array.isArray(data.triggered_by) ? data.triggered_by : [],
+    diagnosis: data.diagnosis ?? null,
+    audioAssessed: Boolean(data.audio_assessed),
+    durationSeconds: typeof data.media_duration_seconds === 'number' ? data.media_duration_seconds : null,
     detectorReason: data.detector_reason ?? '',
     layer3,
   }

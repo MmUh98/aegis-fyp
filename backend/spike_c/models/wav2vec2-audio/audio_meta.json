@@ -1,11 +1,18 @@
 {
   "model_id": "Hemgg/Deepfake-audio-detection",
   "model_revision": "0d75271368ef2c7efd14831dc503c431f6aab0eb",
+  "architecture_label": "Wav2Vec2 audio-classification fine-tune",
+  "deviation_note": "Module 7 names WavLM/AASIST-family detection; the current baseline is a Wav2Vec2 classifier and has not been replaced.",
   "fake_label_index": 0,
   "verified": true,
   "verified_on": ["real.wav", "fake.wav"],
+  "calibration_status": "none",
   "threshold": 0.5,
   "uncertain_margin": 0.15,
+  "window_seconds": 4,
+  "hop_seconds": 2,
+  "min_window_seconds": 2,
+  "aggregation": {"mode": "top_k_mean", "k": 2},
   "observed_probabilities": {
     "real.wav": [0.89012, 0.10988],
     "fake.wav": [0.975955, 0.024045]

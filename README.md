@@ -93,6 +93,8 @@ pip install -r requirements-ai.txt
 PYTHONPATH=. uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+Inference uses `AEGIS_DEVICE=auto` by default. Force CPU for reproducible testing with `AEGIS_DEVICE=cpu`, or set `AEGIS_DEVICE=cuda` to fail loudly when CUDA is unavailable.
+
 The API is available at `http://127.0.0.1:8000/`, with interactive documentation at `http://127.0.0.1:8000/docs`.
 
 Set `AEGIS_REGISTRY_V2_ADDRESS` and `AMOY_RPC_URL` for read-only registry lookups. Set `PRIVATE_KEY` as well to enable `POST /api/v1/register`; the backend wallet signs and broadcasts registration transactions, so a frontend wallet connection is optional.
@@ -129,7 +131,7 @@ The production Layer 3 detector loads the fine-tuned `google/siglip2-base-patch1
 
 The required audio label mapping is recorded in `backend/spike_c/models/wav2vec2-audio/audio_meta.json`. The supplied mapping was empirically verified against `real.wav` and `fake.wav`; model weights remain ignored and must be provisioned separately.
 
-The multimodal API accepts images up to 15 MB and videos (`.mp4`, `.mov`, `.webm`) up to 50 MB and 120 seconds. Audio analysis detects synthetic speech only; it does not detect lip-sync or face-swap manipulation.
+The multimodal API accepts images up to 15 MB and videos (`.mp4`, `.mov`, `.webm`) up to 50 MB and 120 seconds. Audio analysis uses the current Wav2Vec2 baseline in 4-second windows with 2-second overlap and detects synthetic speech only; it does not detect lip-sync or face-swap manipulation.
 
 Install ffmpeg on Ubuntu if it is unavailable:
 

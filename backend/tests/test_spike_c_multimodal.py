@@ -33,6 +33,41 @@ def test_fusion_matrix(visual, audio, expected):
     assert evaluator.fuse_modalities(visual, audio)["verdict"] == expected
 
 
+@pytest.mark.parametrize(
+    ("samples", "expected"),
+    [
+        (16000, []),
+        (32000, [(0, 32000)]),
+        (64000, [(0, 64000)]),
+        (160000, [(0, 64000), (32000, 96000), (64000, 128000), (96000, 160000)]),
+        (144000, [(0, 64000), (32000, 96000), (64000, 128000), (80000, 144000)]),
+    ],
+)
+def test_audio_windows(samples, expected):
+    assert audio_evaluator.make_windows(samples, 4.0, 2.0, 2.0) == expected
+
+
+@pytest.mark.parametrize(
+    ("visual", "audio", "expected", "assessed"),
+    [
+        ("LIKELY_REAL", "LIKELY_REAL", "Authentic", True),
+        ("LIKELY_REAL", "LIKELY_FAKE", "Audio Substitution", True),
+        ("LIKELY_FAKE", "LIKELY_REAL", "AI Visual", True),
+        ("LIKELY_FAKE", "LIKELY_FAKE", "Full Deepfake", True),
+        ("LIKELY_REAL", "no_audio_track", "Authentic", False),
+        ("LIKELY_FAKE", "no_usable_audio", "AI Visual", False),
+        ("LIKELY_REAL", "UNCERTAIN", None, True),
+        ("LIKELY_REAL", "disabled", None, False),
+        ("LIKELY_FAKE", "error", None, False),
+        ("UNCERTAIN", "LIKELY_REAL", None, False),
+    ],
+)
+def test_diagnosis_table(visual, audio, expected, assessed):
+    visual_modality = {"status": "ran", "verdict": visual}
+    audio_modality = {"status": "ran", "verdict": audio} if audio in {"LIKELY_REAL", "LIKELY_FAKE", "UNCERTAIN"} else {"status": audio, "verdict": None}
+    assert evaluator.diagnose(visual_modality, audio_modality) == {"diagnosis": expected, "audio_assessed": assessed}
+
+
 def _make_video(path: Path, with_audio: bool) -> None:
     inputs = ["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i", "testsrc=duration=3:size=320x240:rate=25"]
     if with_audio:
@@ -51,9 +86,13 @@ def test_audio_metadata_is_verified():
 def test_empirical_audio_label_order(tmp_path):
     real = tmp_path / "real.wav"
     fake = tmp_path / "fake.wav"
-    for source, target in (("real.wav", real), ("fake.wav", fake)):
+    sources = (
+        (BACKEND / "sample_data" / "audio" / "real" / "Furqanreal.wav", real),
+        (BACKEND / "sample_data" / "audio" / "fake" / "Ali.wav", fake),
+    )
+    for source, target in sources:
         subprocess.run(
-            ["ffmpeg", "-nostdin", "-v", "error", "-i", str(BACKEND / "sample_data" / "audio" / source), "-ar", "16000", "-ac", "1", "-y", str(target)],
+            ["ffmpeg", "-nostdin", "-v", "error", "-i", str(source), "-ar", "16000", "-ac", "1", "-y", str(target)],
             check=True,
             capture_output=True,
         )

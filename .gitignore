@@ -16,6 +16,8 @@ venv/
 faceforensics_data/
 *.pt
 *.onnx
+backend/sample_data/
+backend/reports/
 
 # Hardhat / Smart Contracts
 artifacts/

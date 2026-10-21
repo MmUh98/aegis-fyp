@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import register
 from spike_c import audio_evaluator
+from spike_c.device import log_device_banner
 from spike_c.evaluator import evaluate_multimodal_deepfake, load_detector
 from app.services.c2pa_service import verify_c2pa_file
 from app.services.chain_client import lookup_on_chain_by_manifest, lookup_on_chain_by_phash
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    log_device_banner()
     load_detector()
     try:
         audio_evaluator.load_audio_detector()
@@ -124,6 +126,7 @@ def verify_media(file: UploadFile = File(...)) -> DecisionResult:
             multimodal = evaluate_multimodal_deepfake(str(temp_path))
             return DecisionResult(
                 **multimodal,
+                confidence_score=0.0,
                 c2pa_status=c2pa_status,
                 on_chain_match=False,
                 phash_distance=phash_distance,

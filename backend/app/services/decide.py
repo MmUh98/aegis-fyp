@@ -46,6 +46,9 @@ class DecisionResult(BaseModel):
     audio: Optional[dict] = None
     audio_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     registry_status: Optional[str] = None
+    diagnosis: Optional[str] = None
+    audio_assessed: Optional[bool] = None
+    media_duration_seconds: Optional[float] = None
 
 
 def decide(
